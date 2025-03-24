@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PD Incentive Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-2xl font-bold text-center mb-6">PD Incentive Calculator FY 2024-25</h1>
+            
+            <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center mb-6">
+                <i class="bi bi-file-earmark-excel text-4xl text-green-600 mb-4"></i>
+                <h3 class="text-lg font-semibold mb-2">Upload Excel File</h3>
+                <p class="text-gray-600 mb-4">Upload your dealer/distributor data file</p>
+                <input type="file" id="excelFile" accept=".xlsx,.xls" class="hidden">
+                <button onclick="document.getElementById('excelFile').click()" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition">
+                    Choose File
+                </button>
+            </div>
+
+            <div id="loading" class="hidden">
+                <div class="flex items-center justify-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                    <span class="ml-2">Processing...</span>
+                </div>
+            </div>
+
+            <div id="results" class="hidden">
+                <h2 class="text-xl font-semibold mb-4">Incentive Calculations</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table-auto">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="px-4 py-2">Distributor ID</th>
+                                <th class="px-4 py-2">Wholesale PSD</th>
+                                <th class="px-4 py-2">Weekly Order</th>
+                                <th class="px-4 py-2">Retail Sales</th>
+                                <th class="px-4 py-2">Focus Product</th>
+                                <th class="px-4 py-2">Distribution</th>
+                                <th class="px-4 py-2">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="error" class="hidden">
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                    <strong class="font-bold">Error!</strong>
+                    <span id="errorMessage" class="block sm:inline"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('excelFile').addEventListener('change', handleFileSelect);
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const error = document.getElementById('error');
+
+            loading.classList.remove('hidden');
+            results.classList.add('hidden');
+            error.classList.add('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    processExcelData(workbook);
+                } catch (err) {
+                    showError('Error processing file: ' + err.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processExcelData(workbook) {
+            const firstSheet = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheet];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+            if (!validateData(jsonData)) {
+                showError('Invalid data format. Please check the Excel file structure.');
+                return;
+            }
+
+            const results = calculateIncentives(jsonData);
+            displayResults(results);
+        }
+
+        function validateData(data) {
+            if (!data.length) return false;
+            const requiredFields = ['distributorId', 'monthlySales', 'monthlyTarget', 'uoValue', 'inventoryFunding'];
+            return data.every(row => requiredFields.every(field => field in row));
+        }
+
+        function calculateIncentives(data) {
+            return data.map(pd => {
+                const wholesalePSD = calculateWholesalePSD(pd);
+                const weeklyOrder = calculateWeeklyOrder(pd);
+                const retailSales = calculateRetailSales(pd);
+                const focusProduct = calculateFocusProduct(pd);
+                const distribution = calculateDistribution(pd);
+
+                return {
+                    distributorId: pd.distributorId,
+                    wholesalePSD,
+                    weeklyOrder,
+                    retailSales,
+                    focusProduct,
+                    distribution,
+                    total: (wholesalePSD + weeklyOrder + retailSales + focusProduct + distribution).toFixed(2)
+                };
+            });
+        }
+
+        function calculateWholesalePSD(pd) {
+            // Simplified calculation logic
+            return pd.monthlySales >= pd.monthlyTarget * 1.05 ? 1.75 : 1.0;
+        }
+
+        function calculateWeeklyOrder(pd) {
+            return 0.80; // Simplified
+        }
+
+        function calculateRetailSales(pd) {
+            return 0.25; // Simplified
+        }
+
+        function calculateFocusProduct(pd) {
+            return 1.0; // Simplified
+        }
+
+        function calculateDistribution(pd) {
+            return 0.70; // Simplified
+        }
+
+        function displayResults(results) {
+            const loading = document.getElementById('loading');
+            const resultsDiv = document.getElementById('results');
+            const tbody = document.getElementById('resultsBody');
+
+            loading.classList.add('hidden');
+            resultsDiv.classList.remove('hidden');
+
+            tbody.innerHTML = '';
+            results.forEach(result => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="border px-4 py-2">${result.distributorId}</td>
+                    <td class="border px-4 py-2">${result.wholesalePSD}%</td>
+                    <td class="border px-4 py-2">${result.weeklyOrder}%</td>
+                    <td class="border px-4 py-2">${result.retailSales}%</td>
+                    <td class="border px-4 py-2">${result.focusProduct}%</td>
+                    <td class="border px-4 py-2">${result.distribution}%</td>
+                    <td class="border px-4 py-2 font-bold">${result.total}%</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function showError(message) {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const errorMessage = document.getElementById('errorMessage');
+
+            loading.classList.add('hidden');
+            error.classList.remove('hidden');
+            errorMessage.textContent = message;
+        }
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
